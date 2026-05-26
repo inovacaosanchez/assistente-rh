@@ -13,6 +13,7 @@ function parseFrontendUrls(value: string | undefined): string[] {
 
 export const env = {
   port: Number(process.env.PORT ?? 3001),
+  host: process.env.HOST ?? "0.0.0.0",
   frontendUrl: process.env.FRONTEND_URL ?? "http://localhost:5173",
   frontendUrls: parseFrontendUrls(process.env.FRONTEND_URL),
   azureOpenAIEndpoint: process.env.AZURE_OPENAI_ENDPOINT ?? "",

@@ -14,6 +14,7 @@ Copie `.env.example` para `.env` e preencha as variáveis da Azure OpenAI:
 
 ```bash
 PORT=3001
+HOST=0.0.0.0
 FRONTEND_URL=http://localhost:5173
 AZURE_OPENAI_ENDPOINT=https://SEU_RECURSO.openai.azure.com
 AZURE_OPENAI_API_KEY=sua-chave-aqui
@@ -26,6 +27,18 @@ AZURE_OPENAI_MODEL=gpt-4o-mini
 
 ```bash
 npm run dev
+```
+
+Para liberar na rede local, mantenha `HOST=0.0.0.0` no `.env` e configure `FRONTEND_URL` com o endereço usado pelos colaboradores, por exemplo:
+
+```bash
+FRONTEND_URL=http://192.168.0.50:5173
+```
+
+Se quiser permitir acesso local e pela rede ao mesmo tempo, informe as origens separadas por vírgula:
+
+```bash
+FRONTEND_URL=http://localhost:5173,http://192.168.0.50:5173
 ```
 
 Para build e execução em modo compilado:
@@ -68,7 +81,7 @@ No Azure AI Foundry ou portal da Azure, crie um recurso Azure OpenAI, faça o de
 
 A chave nunca deve ser exposta no frontend.
 
-Se o frontend estiver rodando em outro host local, como `http://127.0.0.1:5173`, ajuste `FRONTEND_URL` no `.env` do backend. Também é possível informar mais de uma origem separando por vírgula.
+Se o frontend estiver rodando em outro host local, como `http://127.0.0.1:5173` ou no IP da máquina, ajuste `FRONTEND_URL` no `.env` do backend. Também é possível informar mais de uma origem separando por vírgula.
 
 ## Limitações do MVP
 

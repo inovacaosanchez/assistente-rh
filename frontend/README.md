@@ -16,6 +16,12 @@ Copie `.env.example` para `.env`:
 VITE_API_BASE_URL=http://localhost:3001
 ```
 
+Para liberar o sistema na rede local, troque `localhost` pelo IP da máquina que roda o backend:
+
+```bash
+VITE_API_BASE_URL=http://192.168.0.50:3001
+```
+
 ## Rodando com Vite
 
 ```bash
@@ -23,6 +29,12 @@ npm run dev
 ```
 
 A aplicação ficará disponível em `http://localhost:5173`.
+
+Como o Vite está configurado com `host: "0.0.0.0"`, também ficará acessível pelo IP da máquina, por exemplo:
+
+```text
+http://192.168.0.50:5173
+```
 
 ## Gerando build
 
