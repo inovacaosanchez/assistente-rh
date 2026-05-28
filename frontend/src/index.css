@@ -320,14 +320,32 @@ textarea {
   color: rgba(255, 255, 255, 0.78);
 }
 
-.message p {
-  margin: 0;
-  white-space: pre-wrap;
+.message-content {
+  display: grid;
+  gap: 12px;
   overflow-wrap: anywhere;
   line-height: 1.55;
 }
 
-.loading-message p {
+.message-content p {
+  margin: 0;
+}
+
+.message-content ol,
+.message-content ul {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.message-content li + li {
+  margin-top: 4px;
+}
+
+.message-content strong {
+  font-weight: 800;
+}
+
+.loading-message .message-content {
   color: var(--muted);
 }
 
