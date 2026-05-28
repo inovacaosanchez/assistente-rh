@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { env, validateAzureConfig } from "../config/env";
 import { AzureChatMessage } from "../types/chat";
 
@@ -43,9 +45,16 @@ interface AzureThreadMessagesResponse {
   data?: AzureThreadMessage[];
 }
 
+export interface AzureAnswerResult {
+  answer: string;
+  conversationId?: string;
+  cached?: boolean;
+}
+
 type TokenLimitParameter = "max_completion_tokens" | "max_tokens";
 
 interface CachedAnswer {
+  question: string;
   answer: string;
   expiresAt: number;
 }
@@ -60,6 +69,8 @@ export class AzureOpenAIError extends Error {
 let cachedAssistantId: string | undefined;
 let existingAssistantConfigured = false;
 const answerCache = new Map<string, CachedAnswer>();
+let answerCacheLoaded = false;
+const answerCachePath = path.resolve(__dirname, "../../cache/answer-cache.json");
 
 export function shouldUseAzureAssistant(): boolean {
   return Boolean(env.azureOpenAIAssistantId || env.azureOpenAIVectorStoreIds.length > 0);
@@ -76,9 +87,19 @@ function shouldFallbackToAssistant(answer: string): boolean {
     "nao encontrei essa informacao",
     "nao consta no contexto",
     "nao esta no contexto",
-    "procure o rh",
-    "abrir um chamado"
+    "nao tenho essa informacao",
+    "nao tenho acesso a essa informacao",
+    "nao ha informacao oficial"
   ].some((snippet) => normalizedAnswer.includes(snippet));
+}
+
+function cleanAssistantReferences(answer: string): string {
+  return answer
+    .replace(/【[^】]+】/g, "")
+    .replace(/\[\d+:\d+†[^\]]+\]/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function normalizeCacheText(value: string): string {
@@ -90,6 +111,90 @@ function normalizeCacheText(value: string): string {
     .toLowerCase();
 }
 
+function tokenizeCacheText(value: string): Set<string> {
+  const stopWords = new Set([
+    "a",
+    "as",
+    "ao",
+    "aos",
+    "de",
+    "da",
+    "das",
+    "do",
+    "dos",
+    "e",
+    "em",
+    "na",
+    "nas",
+    "no",
+    "nos",
+    "o",
+    "os",
+    "para",
+    "por",
+    "que",
+    "quais",
+    "qual",
+    "como",
+    "onde",
+    "sao",
+    "meu",
+    "minha",
+    "tem",
+    "tenho"
+  ]);
+
+  const synonyms: Record<string, string> = {
+    horarios: "horario",
+    horario: "horario",
+    hor: "horario",
+    rios: "horario",
+    jornada: "jornada",
+    jornadas: "jornada",
+    troca: "troca",
+    trocar: "troca",
+    trocas: "troca",
+    trabalho: "trabalho",
+    trabalhar: "trabalho",
+    beneficios: "beneficio",
+    beneficio: "beneficio",
+    ferias: "ferias",
+    holerite: "holerite",
+    holerites: "holerite",
+    atestado: "atestado",
+    atestados: "atestado",
+    ponto: "ponto",
+    banco: "banco",
+    horas: "horas"
+  };
+
+  return new Set(
+    normalizeCacheText(value)
+      .split(/[^a-z0-9]+/g)
+      .filter((token) => token.length > 2 && !stopWords.has(token))
+      .map((token) => synonyms[token] ?? token)
+  );
+}
+
+function getTextSimilarity(left: string, right: string): number {
+  const leftTokens = tokenizeCacheText(left);
+  const rightTokens = tokenizeCacheText(right);
+
+  if (leftTokens.size === 0 || rightTokens.size === 0) {
+    return 0;
+  }
+
+  let intersection = 0;
+
+  leftTokens.forEach((token) => {
+    if (rightTokens.has(token)) {
+      intersection += 1;
+    }
+  });
+
+  return intersection / Math.max(leftTokens.size, rightTokens.size);
+}
+
 function getLastUserMessage(messages: AzureChatMessage[]): string {
   return [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
 }
@@ -98,10 +203,55 @@ function getCacheKey(messages: AzureChatMessage[]): string {
   return normalizeCacheText(getLastUserMessage(messages));
 }
 
-function getCachedAnswer(cacheKey: string): string | undefined {
+async function loadAnswerCache(): Promise<void> {
+  if (answerCacheLoaded) {
+    return;
+  }
+
+  answerCacheLoaded = true;
+
+  try {
+    const cacheFile = await fs.readFile(answerCachePath, "utf-8");
+    const entries = JSON.parse(cacheFile) as Array<[string, CachedAnswer]>;
+    const now = Date.now();
+
+    entries.forEach(([key, value]) => {
+      if (value.expiresAt > now) {
+        answerCache.set(key, value);
+      }
+    });
+  } catch {
+    // Cache is optional and starts empty when the file does not exist.
+  }
+}
+
+async function persistAnswerCache(): Promise<void> {
+  try {
+    await fs.mkdir(path.dirname(answerCachePath), { recursive: true });
+    await fs.writeFile(answerCachePath, JSON.stringify(Array.from(answerCache.entries()), null, 2));
+  } catch {
+    // Cache persistence must never block the chat response.
+  }
+}
+
+async function getCachedAnswer(cacheKey: string): Promise<string | undefined> {
+  await loadAnswerCache();
+
   const cached = answerCache.get(cacheKey);
 
   if (!cached) {
+    const candidates = Array.from(answerCache.values()).filter((entry) => entry.expiresAt > Date.now());
+    const similar = candidates
+      .map((entry) => ({
+        entry,
+        similarity: getTextSimilarity(cacheKey, entry.question)
+      }))
+      .sort((left, right) => right.similarity - left.similarity)[0];
+
+    if (similar && similar.similarity >= env.azureOpenAIAnswerCacheSimilarity) {
+      return cleanAssistantReferences(similar.entry.answer);
+    }
+
     return undefined;
   }
 
@@ -110,10 +260,10 @@ function getCachedAnswer(cacheKey: string): string | undefined {
     return undefined;
   }
 
-  return cached.answer;
+  return cleanAssistantReferences(cached.answer);
 }
 
-function setCachedAnswer(cacheKey: string, answer: string): void {
+async function setCachedAnswer(cacheKey: string, answer: string): Promise<void> {
   if (!cacheKey || env.azureOpenAIAnswerCacheTtlMs <= 0 || shouldFallbackToAssistant(answer)) {
     return;
   }
@@ -127,9 +277,11 @@ function setCachedAnswer(cacheKey: string, answer: string): void {
   }
 
   answerCache.set(cacheKey, {
+    question: cacheKey,
     answer,
     expiresAt: Date.now() + env.azureOpenAIAnswerCacheTtlMs
   });
+  await persistAnswerCache();
 }
 
 function getAzureBaseUrl(apiVersion: string): string {
@@ -317,11 +469,7 @@ async function waitForRun(threadId: string, runId: string, signal: AbortSignal):
   }
 }
 
-async function getAzureAssistantAnswer(messages: AzureChatMessage[], signal: AbortSignal): Promise<string> {
-  validateAzureConfig({ assistantMode: true });
-
-  const instructions = buildAssistantInstructions(messages);
-  const assistantId = await createAzureAssistant(instructions, signal);
+async function createThread(messageContent: string, signal: AbortSignal): Promise<string> {
   const thread = await requestAzureJson<AzureThreadResponse>(
     buildAzureUrl("/threads", env.azureOpenAIAssistantsApiVersion),
     {
@@ -330,7 +478,7 @@ async function getAzureAssistantAnswer(messages: AzureChatMessage[], signal: Abo
         messages: [
           {
             role: "user",
-            content: buildAssistantUserMessage(messages)
+            content: messageContent
           }
         ]
       },
@@ -342,8 +490,41 @@ async function getAzureAssistantAnswer(messages: AzureChatMessage[], signal: Abo
     throw new AzureOpenAIError("Thread invalida retornada pela Azure OpenAI");
   }
 
+  return thread.id;
+}
+
+async function addThreadMessage(threadId: string, messageContent: string, signal: AbortSignal): Promise<void> {
+  await requestAzureJson<AzureThreadResponse>(
+    buildAzureUrl(`/threads/${encodeURIComponent(threadId)}/messages`, env.azureOpenAIAssistantsApiVersion),
+    {
+      method: "POST",
+      body: {
+        role: "user",
+        content: messageContent
+      },
+      signal
+    }
+  );
+}
+
+async function getAzureAssistantAnswer(
+  messages: AzureChatMessage[],
+  signal: AbortSignal,
+  conversationId?: string
+): Promise<AzureAnswerResult> {
+  validateAzureConfig({ assistantMode: true });
+
+  const instructions = buildAssistantInstructions(messages);
+  const assistantId = await createAzureAssistant(instructions, signal);
+  const messageContent = conversationId ? getLastUserMessage(messages) : buildAssistantUserMessage(messages);
+  const threadId = conversationId ?? (await createThread(messageContent, signal));
+
+  if (conversationId) {
+    await addThreadMessage(conversationId, messageContent, signal);
+  }
+
   const run = await requestAzureJson<AzureRunResponse>(
-    buildAzureUrl(`/threads/${encodeURIComponent(thread.id)}/runs`, env.azureOpenAIAssistantsApiVersion),
+    buildAzureUrl(`/threads/${encodeURIComponent(threadId)}/runs`, env.azureOpenAIAssistantsApiVersion),
     {
       method: "POST",
       body: {
@@ -357,14 +538,17 @@ async function getAzureAssistantAnswer(messages: AzureChatMessage[], signal: Abo
     throw new AzureOpenAIError("Run invalido retornado pela Azure OpenAI");
   }
 
-  await waitForRun(thread.id, run.id, signal);
+  await waitForRun(threadId, run.id, signal);
 
   const threadMessages = await requestAzureJson<AzureThreadMessagesResponse>(
-    `${buildAzureUrl(`/threads/${encodeURIComponent(thread.id)}/messages`, env.azureOpenAIAssistantsApiVersion)}&order=desc&limit=10`,
+    `${buildAzureUrl(`/threads/${encodeURIComponent(threadId)}/messages`, env.azureOpenAIAssistantsApiVersion)}&order=desc&limit=10`,
     { signal }
   );
 
-  return getAssistantAnswer(threadMessages);
+  return {
+    answer: cleanAssistantReferences(getAssistantAnswer(threadMessages)),
+    conversationId: threadId
+  };
 }
 
 async function getAzureChatCompletionAnswer(messages: AzureChatMessage[], signal: AbortSignal): Promise<string> {
@@ -408,13 +592,17 @@ async function getAzureChatCompletionAnswer(messages: AzureChatMessage[], signal
   return answer;
 }
 
-export async function getAzureOpenAIAnswer(messages: AzureChatMessage[]): Promise<string> {
+export async function getAzureOpenAIAnswer(messages: AzureChatMessage[], conversationId?: string): Promise<AzureAnswerResult> {
   const useAssistant = shouldUseAzureAssistant();
   const cacheKey = useAssistant ? getCacheKey(messages) : "";
-  const cachedAnswer = useAssistant ? getCachedAnswer(cacheKey) : undefined;
+  const cachedAnswer = useAssistant ? await getCachedAnswer(cacheKey) : undefined;
 
   if (cachedAnswer) {
-    return cachedAnswer;
+    return {
+      answer: cachedAnswer,
+      conversationId,
+      cached: true
+    };
   }
 
   const controller = new AbortController();
@@ -427,7 +615,10 @@ export async function getAzureOpenAIAnswer(messages: AzureChatMessage[]): Promis
         const fastAnswer = await getAzureChatCompletionAnswer(messages, controller.signal);
 
         if (!shouldFallbackToAssistant(fastAnswer)) {
-          return fastAnswer;
+          return {
+            answer: fastAnswer,
+            conversationId
+          };
         }
       } catch {
         // If the fast path is unavailable, continue with the configured Assistant.
@@ -435,12 +626,15 @@ export async function getAzureOpenAIAnswer(messages: AzureChatMessage[]): Promis
     }
 
     if (useAssistant) {
-      const assistantAnswer = await getAzureAssistantAnswer(messages, controller.signal);
-      setCachedAnswer(cacheKey, assistantAnswer);
-      return assistantAnswer;
+      const assistantResult = await getAzureAssistantAnswer(messages, controller.signal, conversationId);
+      await setCachedAnswer(cacheKey, assistantResult.answer);
+      return assistantResult;
     }
 
-    return await getAzureChatCompletionAnswer(messages, controller.signal);
+    return {
+      answer: await getAzureChatCompletionAnswer(messages, controller.signal),
+      conversationId
+    };
   } catch (error) {
     if (error instanceof AzureOpenAIError) {
       throw error;

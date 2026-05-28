@@ -117,6 +117,7 @@ Nao execute acoes como aprovar ferias, alterar ponto, consultar salario ou tomar
 export async function handleChat(req: Request, res: Response<ChatResponse>): Promise<void> {
   const body = req.body as Partial<ChatRequest>;
   const message = typeof body.message === "string" ? sanitizeText(body.message) : "";
+  const conversationId = typeof body.conversationId === "string" ? sanitizeText(body.conversationId) : undefined;
 
   if (!message) {
     res.status(400).json({
@@ -152,12 +153,13 @@ export async function handleChat(req: Request, res: Response<ChatResponse>): Pro
       }
     ];
 
-    const answer = await getAzureOpenAIAnswer(messages);
+    const result = await getAzureOpenAIAnswer(messages, conversationId);
     await logChatQuestion(message, "success");
 
     res.json({
       success: true,
-      answer
+      answer: result.answer,
+      conversationId: result.conversationId
     });
   } catch (error) {
     await logChatQuestion(message, "error").catch(() => undefined);
