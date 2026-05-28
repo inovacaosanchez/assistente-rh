@@ -1,4 +1,5 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { sendChatMessage } from "../services/chatService";
 import { ChatMessage } from "../types/chat";
 
@@ -14,6 +15,98 @@ const QUICK_QUESTIONS = [
   "Como funciona o banco de horas?",
   "Quais benefícios posso consultar?"
 ];
+
+function cleanAssistantContent(content: string): string {
+  return content
+    .replace(/【[^】]+】/g, "")
+    .replace(/\[\d+:\d+†[^\]]+\]/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+
+  return parts
+    .filter(Boolean)
+    .map((part, index) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return <strong key={index}>{part.slice(2, -2)}</strong>;
+      }
+
+      return part;
+    });
+}
+
+function renderMessageContent(content: string): ReactNode {
+  const lines = cleanAssistantContent(content).split("\n");
+  const blocks: ReactNode[] = [];
+  let orderedListItems: string[] = [];
+  let unorderedListItems: string[] = [];
+
+  function flushOrderedList() {
+    if (orderedListItems.length === 0) return;
+
+    blocks.push(
+      <ol key={`ol-${blocks.length}`}>
+        {orderedListItems.map((item, index) => (
+          <li key={index}>{renderInlineMarkdown(item)}</li>
+        ))}
+      </ol>
+    );
+    orderedListItems = [];
+  }
+
+  function flushUnorderedList() {
+    if (unorderedListItems.length === 0) return;
+
+    blocks.push(
+      <ul key={`ul-${blocks.length}`}>
+        {unorderedListItems.map((item, index) => (
+          <li key={index}>{renderInlineMarkdown(item)}</li>
+        ))}
+      </ul>
+    );
+    unorderedListItems = [];
+  }
+
+  function flushLists() {
+    flushOrderedList();
+    flushUnorderedList();
+  }
+
+  lines.forEach((line) => {
+    const trimmedLine = line.trim();
+
+    if (!trimmedLine) {
+      flushLists();
+      return;
+    }
+
+    const numberedItem = trimmedLine.match(/^\d+\.\s+(.+)$/);
+    const bulletItem = trimmedLine.match(/^[-*]\s+(.+)$/);
+
+    if (numberedItem) {
+      flushUnorderedList();
+      orderedListItems.push(numberedItem[1]);
+      return;
+    }
+
+    if (bulletItem) {
+      flushOrderedList();
+      unorderedListItems.push(bulletItem[1]);
+      return;
+    }
+
+    flushLists();
+    blocks.push(<p key={`p-${blocks.length}`}>{renderInlineMarkdown(trimmedLine)}</p>);
+  });
+
+  flushLists();
+
+  return <div className="message-content">{blocks}</div>;
+}
 
 export function ChatRh() {
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE]);
@@ -49,7 +142,7 @@ export function ChatRh() {
         throw new Error(response.error ?? "Não foi possível processar sua solicitação no momento.");
       }
 
-      setMessages((current) => [...current, { role: "assistant", content: response.answer ?? "" }]);
+      setMessages((current) => [...current, { role: "assistant", content: cleanAssistantContent(response.answer ?? "") }]);
     } catch {
       setError("Não foi possível processar sua solicitação no momento.");
       setMessages((current) => [
@@ -156,7 +249,7 @@ export function ChatRh() {
             {messages.map((message, index) => (
               <article className={`message message-${message.role}`} key={`${message.role}-${index}`}>
                 <div className="message-label">{message.role === "user" ? "Você" : "Assistente"}</div>
-                <p>{message.content}</p>
+                {renderMessageContent(message.content)}
               </article>
             ))}
 
