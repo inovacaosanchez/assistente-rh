@@ -20,7 +20,15 @@ AZURE_OPENAI_ENDPOINT=https://SEU_RECURSO.openai.azure.com
 AZURE_OPENAI_API_KEY=sua-chave-aqui
 AZURE_OPENAI_DEPLOYMENT=nome-do-deployment
 AZURE_OPENAI_API_VERSION=2024-10-21
+AZURE_OPENAI_ASSISTANTS_API_VERSION=2024-05-01-preview
+AZURE_OPENAI_ASSISTANT_ID=
+AZURE_OPENAI_ASSISTANT_NAME=AgenteRH
+AZURE_OPENAI_VECTOR_STORE_IDS=vs_Sx3XjRGcZOYzW5JHpJWBuD8V
 AZURE_OPENAI_MODEL=gpt-4o-mini
+AZURE_OPENAI_ASSISTANTS_TIMEOUT_MS=90000
+AZURE_OPENAI_FAST_LOCAL_FIRST=false
+AZURE_OPENAI_ANSWER_CACHE_TTL_MS=3600000
+AZURE_OPENAI_ANSWER_CACHE_MAX_ITEMS=100
 ```
 
 ## Rodando localmente
@@ -80,6 +88,44 @@ No Azure AI Foundry ou portal da Azure, crie um recurso Azure OpenAI, faça o de
 - `AZURE_OPENAI_MODEL`: modelo usado como referência.
 
 A chave nunca deve ser exposta no frontend.
+
+### Usando Azure Assistants com file_search
+
+O backend mantem o mesmo endpoint `/api/chat`, mas passa a usar o fluxo de Assistants quando uma destas variaveis estiver preenchida:
+
+- `AZURE_OPENAI_ASSISTANT_ID`: id de um Assistant ja criado na Azure.
+- `AZURE_OPENAI_VECTOR_STORE_IDS`: um ou mais vector stores separados por virgula.
+
+Se `AZURE_OPENAI_ASSISTANT_ID` estiver vazio e `AZURE_OPENAI_VECTOR_STORE_IDS` estiver preenchido, o backend cria um Assistant em memoria no primeiro uso com este payload:
+
+```json
+{
+  "name": "AgenteRH",
+  "model": "nome-do-deployment",
+  "tools": [
+    {
+      "type": "file_search"
+    }
+  ],
+  "tool_resources": {
+    "file_search": {
+      "vector_store_ids": ["vs_Sx3XjRGcZOYzW5JHpJWBuD8V"]
+    }
+  },
+  "temperature": 1,
+  "top_p": 1
+}
+```
+
+Para evitar criar um novo Assistant a cada reinicio do servidor, crie o Assistant uma vez na Azure e salve o id retornado em `AZURE_OPENAI_ASSISTANT_ID`.
+
+Na Azure, o campo `model` deve ser o nome do deployment configurado em `AZURE_OPENAI_DEPLOYMENT`.
+
+Como respostas com `file_search` podem demorar mais do que chat completions simples, `AZURE_OPENAI_ASSISTANTS_TIMEOUT_MS` controla apenas o timeout do fluxo de Assistants.
+
+Para reduzir latencia em bases locais completas, `AZURE_OPENAI_FAST_LOCAL_FIRST=true` tenta primeiro responder com o contexto local via chat completions. Neste projeto, como a base principal esta no vector store, o valor recomendado e `false`.
+
+Respostas bem-sucedidas do Assistant ficam em cache de memoria por `AZURE_OPENAI_ANSWER_CACHE_TTL_MS`, limitado por `AZURE_OPENAI_ANSWER_CACHE_MAX_ITEMS`. Isso acelera perguntas repetidas e frequentes sem mudar o contrato do frontend.
 
 Se o frontend estiver rodando em outro host local, como `http://127.0.0.1:5173` ou no IP da máquina, ajuste `FRONTEND_URL` no `.env` do backend. Também é possível informar mais de uma origem separando por vírgula.
 
