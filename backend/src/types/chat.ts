@@ -8,11 +8,13 @@ export interface ChatMessage {
 export interface ChatRequest {
   message: string;
   history: ChatMessage[];
+  conversationId?: string;
 }
 
 export interface ChatResponse {
   success: boolean;
   answer?: string;
+  conversationId?: string;
   error?: string;
 }
 

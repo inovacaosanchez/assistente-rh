@@ -110,6 +110,7 @@ function renderMessageContent(content: string): ReactNode {
 
 export function ChatRh() {
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE]);
+  const [conversationId, setConversationId] = useState<string | undefined>();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -136,10 +137,14 @@ export function ChatRh() {
     setIsLoading(true);
 
     try {
-      const response = await sendChatMessage(userMessage, previousMessages);
+      const response = await sendChatMessage(userMessage, previousMessages, conversationId);
 
       if (!response.success || !response.answer) {
         throw new Error(response.error ?? "Não foi possível processar sua solicitação no momento.");
+      }
+
+      if (response.conversationId) {
+        setConversationId(response.conversationId);
       }
 
       setMessages((current) => [...current, { role: "assistant", content: cleanAssistantContent(response.answer ?? "") }]);

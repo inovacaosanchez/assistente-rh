@@ -5,3 +5,4 @@ logs/*.log
 npm-debug.log*
 *.tsbuildinfo
 frontend/perguntas-usuarios.txt
+backend/cache/*.json

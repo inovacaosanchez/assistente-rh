@@ -42,7 +42,8 @@ export const env = {
   azureOpenAIAssistantsTimeoutMs: Number(process.env.AZURE_OPENAI_ASSISTANTS_TIMEOUT_MS ?? 90000),
   azureOpenAIFastLocalFirst: parseBoolean(process.env.AZURE_OPENAI_FAST_LOCAL_FIRST, false),
   azureOpenAIAnswerCacheTtlMs: Number(process.env.AZURE_OPENAI_ANSWER_CACHE_TTL_MS ?? 3600000),
-  azureOpenAIAnswerCacheMaxItems: Number(process.env.AZURE_OPENAI_ANSWER_CACHE_MAX_ITEMS ?? 100)
+  azureOpenAIAnswerCacheMaxItems: Number(process.env.AZURE_OPENAI_ANSWER_CACHE_MAX_ITEMS ?? 100),
+  azureOpenAIAnswerCacheSimilarity: Number(process.env.AZURE_OPENAI_ANSWER_CACHE_SIMILARITY ?? 0.5)
 };
 
 export function validateAzureConfig(options: { assistantMode?: boolean } = {}): void {
