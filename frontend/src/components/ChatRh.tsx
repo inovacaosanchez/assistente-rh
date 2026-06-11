@@ -3,17 +3,19 @@ import type { ReactNode } from "react";
 import { sendChatMessage } from "../services/chatService";
 import { ChatMessage } from "../types/chat";
 
+type UserProfile = "gestor" | "colaborador";
+
 const INITIAL_MESSAGE: ChatMessage = {
   role: "assistant",
-  content: "Olá! Sou o assistente virtual do RH da Sanchez. Como posso ajudar?"
+  content: "Ola! Sou o assistente virtual do RH da Sanchez. Como posso ajudar?"
 };
 
 const QUICK_QUESTIONS = [
   "Onde posso ver meu holerite?",
-  "Como solicito férias?",
+  "Como solicito ferias?",
   "Como envio um atestado?",
   "Como funciona o banco de horas?",
-  "Quais benefícios posso consultar?"
+  "Quais beneficios posso consultar?"
 ];
 
 function cleanAssistantContent(content: string): string {
@@ -109,6 +111,7 @@ function renderMessageContent(content: string): ReactNode {
 }
 
 export function ChatRh() {
+  const [selectedProfile, setSelectedProfile] = useState<UserProfile | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([INITIAL_MESSAGE]);
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [input, setInput] = useState("");
@@ -126,7 +129,7 @@ export function ChatRh() {
 
   async function sendMessage(rawMessage: string) {
     const userMessage = rawMessage.trim();
-    if (!userMessage || isLoading) return;
+    if (!selectedProfile || !userMessage || isLoading) return;
 
     const previousMessages = messages;
     const nextMessages: ChatMessage[] = [...previousMessages, { role: "user", content: userMessage }];
@@ -137,10 +140,10 @@ export function ChatRh() {
     setIsLoading(true);
 
     try {
-      const response = await sendChatMessage(userMessage, previousMessages, conversationId);
+      const response = await sendChatMessage(userMessage, previousMessages, selectedProfile, conversationId);
 
       if (!response.success || !response.answer) {
-        throw new Error(response.error ?? "Não foi possível processar sua solicitação no momento.");
+        throw new Error(response.error ?? "Nao foi possivel processar sua solicitacao no momento.");
       }
 
       if (response.conversationId) {
@@ -149,12 +152,12 @@ export function ChatRh() {
 
       setMessages((current) => [...current, { role: "assistant", content: cleanAssistantContent(response.answer ?? "") }]);
     } catch {
-      setError("Não foi possível processar sua solicitação no momento.");
+      setError("Nao foi possivel processar sua solicitacao no momento.");
       setMessages((current) => [
         ...current,
         {
           role: "assistant",
-          content: "Desculpe, não consegui responder agora. Tente novamente em instantes ou fale com o RH."
+          content: "Desculpe, nao consegui responder agora. Tente novamente em instantes ou fale com o RH."
         }
       ]);
     } finally {
@@ -177,6 +180,14 @@ export function ChatRh() {
       event.preventDefault();
       void handleSubmit();
     }
+  }
+
+  function handleProfileSelection(profile: UserProfile) {
+    setSelectedProfile(profile);
+    setConversationId(undefined);
+    setMessages([INITIAL_MESSAGE]);
+    setInput("");
+    setError("");
   }
 
   return (
@@ -202,7 +213,6 @@ export function ChatRh() {
           <span className="brand-name">Sanchez</span>
           <span className="brand-subtitle">sociedade de advogados</span>
         </div>
-
       </header>
 
       <section className="hero-band">
@@ -214,79 +224,101 @@ export function ChatRh() {
         </div>
       </section>
 
-      <section className="chat-layout" aria-label="Chat do RH Sanchez">
-        <aside className="chat-intro">
-          <p className="intro-kicker">Recursos Humanos</p>
-          <h2>Tire suas dúvidas de forma rápida</h2>
-          <p>
-            Atendimento virtual para dúvidas gerais sobre processos de RH, com respostas baseadas nas orientações
-            internas disponíveis.
-          </p>
-
-          <div className="quick-panel" aria-label="Perguntas frequentes">
-            <p>Dúvidas frequentes</p>
-            <div className="quick-list">
-              {QUICK_QUESTIONS.map((question) => (
-                <button
-                  className="quick-question"
-                  type="button"
-                  key={question}
-                  disabled={isLoading}
-                  onClick={() => handleQuickQuestion(question)}
-                >
-                  {question}
-                </button>
-              ))}
+      {!selectedProfile ? (
+        <section className="profile-gate" aria-label="Selecao de perfil">
+          <div className="profile-card">
+            <p className="intro-kicker">Atendimento Interno de RH</p>
+            <h2>Selecione o tipo de atendimento</h2>
+            <p>Escolha seu perfil para receber orientacoes de RH alinhadas aos processos internos da Sanchez &amp; Sanchez.</p>
+            <div className="profile-actions">
+              <button type="button" className="profile-button" onClick={() => handleProfileSelection("gestor")}>
+                Acessar como Gestor
+              </button>
+              <button type="button" className="profile-button" onClick={() => handleProfileSelection("colaborador")}>
+                Acessar como Colaborador
+              </button>
             </div>
           </div>
-        </aside>
-
-        <section className="chat-shell" aria-label="Mensagens do assistente">
-          <header className="chat-header">
-            <div>
-              <p className="chat-kicker">Atendimento virtual</p>
-              <h2>Conversa com o RH</h2>
-            </div>
-            <span className="status-pill">Online</span>
-        </header>
-
-          <div className="messages" aria-live="polite">
-            {messages.map((message, index) => (
-              <article className={`message message-${message.role}`} key={`${message.role}-${index}`}>
-                <div className="message-label">{message.role === "user" ? "Você" : "Assistente"}</div>
-                {renderMessageContent(message.content)}
-              </article>
-            ))}
-
-            {isLoading && (
-              <article className="message message-assistant loading-message">
-                <div className="message-label">Assistente</div>
-                <p>Pensando...</p>
-              </article>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {error && <div className="error-banner">{error}</div>}
-
-          <form className="composer" onSubmit={handleSubmit}>
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Digite sua dúvida sobre RH..."
-              rows={2}
-              maxLength={2000}
-              disabled={isLoading}
-              aria-label="Mensagem para o assistente"
-            />
-            <button type="submit" disabled={!canSubmit}>
-              {isLoading ? "Enviando" : "Enviar"}
-            </button>
-          </form>
         </section>
-      </section>
+      ) : (
+        <section className="chat-layout" aria-label="Chat do RH Sanchez">
+          <aside className="chat-intro">
+            <p className="intro-kicker">Recursos Humanos</p>
+            <h2>Tire suas duvidas de forma rapida</h2>
+            <p>Atendimento virtual para duvidas gerais sobre processos de RH, com respostas baseadas nas orientacoes internas disponiveis.</p>
+
+            <div className="quick-panel" aria-label="Perguntas frequentes">
+              <p>Duvidas frequentes</p>
+              <div className="quick-list">
+                {QUICK_QUESTIONS.map((question) => (
+                  <button
+                    className="quick-question"
+                    type="button"
+                    key={question}
+                    disabled={isLoading}
+                    onClick={() => handleQuickQuestion(question)}
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </aside>
+
+          <section className="chat-shell" aria-label="Mensagens do assistente">
+            <header className="chat-header">
+              <div>
+                <p className="chat-kicker">Atendimento virtual</p>
+                <h2>Conversa com o RH</h2>
+              </div>
+              <div className="chat-header-actions">
+                <span className="status-pill">{selectedProfile === "gestor" ? "Perfil: Gestor" : "Perfil: Colaborador"}</span>
+                <button type="button" className="profile-switch" onClick={() => setSelectedProfile(null)} disabled={isLoading}>
+                  Trocar perfil
+                </button>
+              </div>
+            </header>
+
+            <div className="messages" aria-live="polite">
+              {messages.map((message, index) => (
+                <article className={`message message-${message.role}`} key={`${message.role}-${index}`}>
+                  <div className="message-label">{message.role === "user" ? "Voce" : "Assistente"}</div>
+                  {renderMessageContent(message.content)}
+                </article>
+              ))}
+
+              {isLoading && (
+                <article className="message message-assistant loading-message">
+                  <div className="message-label">Assistente</div>
+                  <div className="message-content">
+                    <p>Pensando...</p>
+                  </div>
+                </article>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {error && <div className="error-banner">{error}</div>}
+
+            <form className="composer" onSubmit={handleSubmit}>
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Digite sua duvida sobre RH..."
+                rows={2}
+                maxLength={2000}
+                disabled={isLoading}
+                aria-label="Mensagem para o assistente"
+              />
+              <button type="submit" disabled={!canSubmit}>
+                {isLoading ? "Enviando" : "Enviar"}
+              </button>
+            </form>
+          </section>
+        </section>
+      )}
     </main>
   );
 }

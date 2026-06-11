@@ -158,6 +158,62 @@ textarea {
   padding: 24px 0;
 }
 
+.profile-gate {
+  width: min(980px, calc(100% - 40px));
+  min-height: calc(100vh - 230px);
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+  padding: 24px 0;
+}
+
+.profile-card {
+  width: min(560px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 28px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(37, 22, 25, 0.1);
+}
+
+.profile-card h2 {
+  margin: 0 0 10px;
+  color: var(--wine);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.5rem, 2.8vw, 2rem);
+}
+
+.profile-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.profile-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.profile-button {
+  min-height: 48px;
+  border: 1px solid #d8c2c6;
+  border-radius: 8px;
+  padding: 0 14px;
+  color: var(--wine);
+  background: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.profile-button:hover,
+.profile-button:focus-visible {
+  border-color: var(--wine);
+  background: #fff6f8;
+  outline: none;
+}
+
 .chat-intro {
   padding-top: 22px;
 }
@@ -252,6 +308,12 @@ textarea {
   background: #fbfbfb;
 }
 
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .chat-kicker {
   margin: 0 0 4px;
   color: var(--wine);
@@ -278,6 +340,27 @@ textarea {
   background: #fff7f8;
   font-size: 0.85rem;
   font-weight: 700;
+}
+
+.profile-switch {
+  border: 1px solid #dbc3c8;
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--wine);
+  background: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.profile-switch:hover:not(:disabled) {
+  border-color: var(--wine);
+  background: #fff6f8;
+}
+
+.profile-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .messages {
@@ -434,6 +517,10 @@ textarea {
     padding-top: 0;
   }
 
+  .profile-actions {
+    grid-template-columns: 1fr;
+  }
+
   .chat-shell {
     height: 680px;
   }
@@ -469,6 +556,16 @@ textarea {
   .chat-layout {
     min-height: auto;
     padding: 16px 0 12px;
+  }
+
+  .profile-gate {
+    width: min(100% - 28px, 980px);
+    min-height: calc(100vh - 220px);
+    padding: 16px 0;
+  }
+
+  .profile-card {
+    padding: 20px;
   }
 
   .chat-intro h2 {
@@ -508,6 +605,11 @@ textarea {
   .chat-header {
     align-items: flex-start;
     padding: 18px;
+  }
+
+  .chat-header-actions {
+    flex-direction: column;
+    align-items: flex-end;
   }
 
   .messages {

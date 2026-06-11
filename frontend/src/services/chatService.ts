@@ -1,22 +1,38 @@
 import { ChatMessage, ChatResponse } from "../types/chat";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
-const GENERIC_ERROR = "Não foi possível processar sua solicitação no momento.";
+const GENERIC_ERROR = "Nao foi possivel processar sua solicitacao no momento.";
+type UserProfile = "gestor" | "colaborador";
+
+function enrichMessageWithProfile(message: string, profile: UserProfile): string {
+  const profilePhrase = profile === "gestor" ? "Sou gestor" : "Sou colaborador";
+  return `${profilePhrase}.\nPergunta: ${message}`;
+}
 
 export async function sendChatMessage(
   message: string,
   history: ChatMessage[],
+  profile: UserProfile,
   conversationId?: string
 ): Promise<ChatResponse> {
   try {
+    const enrichedHistory = history.map((item) =>
+      item.role === "user"
+        ? {
+            ...item,
+            content: enrichMessageWithProfile(item.content, profile)
+          }
+        : item
+    );
+
     const response = await fetch(`${API_BASE_URL}/api/chat`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        message,
-        history,
+        message: enrichMessageWithProfile(message, profile),
+        history: enrichedHistory,
         conversationId
       })
     });
