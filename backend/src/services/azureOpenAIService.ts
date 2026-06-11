@@ -111,90 +111,6 @@ function normalizeCacheText(value: string): string {
     .toLowerCase();
 }
 
-function tokenizeCacheText(value: string): Set<string> {
-  const stopWords = new Set([
-    "a",
-    "as",
-    "ao",
-    "aos",
-    "de",
-    "da",
-    "das",
-    "do",
-    "dos",
-    "e",
-    "em",
-    "na",
-    "nas",
-    "no",
-    "nos",
-    "o",
-    "os",
-    "para",
-    "por",
-    "que",
-    "quais",
-    "qual",
-    "como",
-    "onde",
-    "sao",
-    "meu",
-    "minha",
-    "tem",
-    "tenho"
-  ]);
-
-  const synonyms: Record<string, string> = {
-    horarios: "horario",
-    horario: "horario",
-    hor: "horario",
-    rios: "horario",
-    jornada: "jornada",
-    jornadas: "jornada",
-    troca: "troca",
-    trocar: "troca",
-    trocas: "troca",
-    trabalho: "trabalho",
-    trabalhar: "trabalho",
-    beneficios: "beneficio",
-    beneficio: "beneficio",
-    ferias: "ferias",
-    holerite: "holerite",
-    holerites: "holerite",
-    atestado: "atestado",
-    atestados: "atestado",
-    ponto: "ponto",
-    banco: "banco",
-    horas: "horas"
-  };
-
-  return new Set(
-    normalizeCacheText(value)
-      .split(/[^a-z0-9]+/g)
-      .filter((token) => token.length > 2 && !stopWords.has(token))
-      .map((token) => synonyms[token] ?? token)
-  );
-}
-
-function getTextSimilarity(left: string, right: string): number {
-  const leftTokens = tokenizeCacheText(left);
-  const rightTokens = tokenizeCacheText(right);
-
-  if (leftTokens.size === 0 || rightTokens.size === 0) {
-    return 0;
-  }
-
-  let intersection = 0;
-
-  leftTokens.forEach((token) => {
-    if (rightTokens.has(token)) {
-      intersection += 1;
-    }
-  });
-
-  return intersection / Math.max(leftTokens.size, rightTokens.size);
-}
-
 function getLastUserMessage(messages: AzureChatMessage[]): string {
   return [...messages].reverse().find((message) => message.role === "user")?.content ?? "";
 }
@@ -240,18 +156,6 @@ async function getCachedAnswer(cacheKey: string): Promise<string | undefined> {
   const cached = answerCache.get(cacheKey);
 
   if (!cached) {
-    const candidates = Array.from(answerCache.values()).filter((entry) => entry.expiresAt > Date.now());
-    const similar = candidates
-      .map((entry) => ({
-        entry,
-        similarity: getTextSimilarity(cacheKey, entry.question)
-      }))
-      .sort((left, right) => right.similarity - left.similarity)[0];
-
-    if (similar && similar.similarity >= env.azureOpenAIAnswerCacheSimilarity) {
-      return cleanAssistantReferences(similar.entry.answer);
-    }
-
     return undefined;
   }
 

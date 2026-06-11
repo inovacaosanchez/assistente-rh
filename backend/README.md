@@ -29,7 +29,6 @@ AZURE_OPENAI_ASSISTANTS_TIMEOUT_MS=90000
 AZURE_OPENAI_FAST_LOCAL_FIRST=false
 AZURE_OPENAI_ANSWER_CACHE_TTL_MS=3600000
 AZURE_OPENAI_ANSWER_CACHE_MAX_ITEMS=100
-AZURE_OPENAI_ANSWER_CACHE_SIMILARITY=0.5
 ```
 
 ## Rodando localmente
@@ -126,7 +125,7 @@ Como respostas com `file_search` podem demorar mais do que chat completions simp
 
 Para reduzir latencia em bases locais completas, `AZURE_OPENAI_FAST_LOCAL_FIRST=true` tenta primeiro responder com o contexto local via chat completions. Neste projeto, como a base principal esta no vector store, o valor recomendado e `false`.
 
-Respostas bem-sucedidas do Assistant ficam em cache por `AZURE_OPENAI_ANSWER_CACHE_TTL_MS`, limitado por `AZURE_OPENAI_ANSWER_CACHE_MAX_ITEMS`. O cache tambem aceita perguntas parecidas, controlado por `AZURE_OPENAI_ANSWER_CACHE_SIMILARITY`, e e salvo em `cache/answer-cache.json`.
+Respostas bem-sucedidas do Assistant ficam em cache por `AZURE_OPENAI_ANSWER_CACHE_TTL_MS`, limitado por `AZURE_OPENAI_ANSWER_CACHE_MAX_ITEMS`, e salvo em `cache/answer-cache.json`. O cache so e usado para a mesma pergunta (chave exata normalizada), sem reaproveitar para perguntas diferentes.
 
 O frontend envia um `conversationId` retornado pelo backend para reaproveitar a mesma thread da Azure durante a conversa, reduzindo chamadas repetidas de criacao de thread.
 
