@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 logs/*.log
+backend/logs/chat.log
 npm-debug.log*
 *.tsbuildinfo
 frontend/perguntas-usuarios.txt
